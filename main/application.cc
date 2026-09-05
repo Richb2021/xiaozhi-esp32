@@ -13,6 +13,7 @@
 #if CONFIG_BOARD_TYPE_GRAYSON_WORK_WATCH
 #include "boards/grayson/grayson-work-watch/gw_screens.h"
 #include "boards/grayson/grayson-work-watch/gw_video.h"
+#include "audio/wake_words/custom_wake_word.h"
 #endif
 
 #include <driver/gpio.h>
@@ -738,6 +739,18 @@ void Application::InitializeProtocol() {
             if (cJSON_IsString(level) && cJSON_IsString(title)) {
                 Schedule([display, l = std::string(level->valuestring), t = std::string(title->valuestring), b = std::string(cJSON_IsString(body) ? body->valuestring : "")]() {
                     DisplayLockGuard lock(display); GwScreens::GetInstance().ShowToast(l.c_str(), t.c_str(), b.c_str());
+                });
+            }
+        } else if (strcmp(type->valuestring, "gw_config") == 0) {
+            auto ww = cJSON_GetObjectItem(root, "wake_word");
+            auto th = cJSON_GetObjectItem(root, "wake_threshold");
+            if (cJSON_IsString(ww)) {
+                Schedule([display, phrase = std::string(ww->valuestring), thr = cJSON_IsNumber(th) ? (int)th->valuedouble : 0]() {
+                    auto cw = CustomWakeWord::Instance();
+                    bool ok = cw != nullptr && cw->SetWakeWord(phrase, thr);
+                    DisplayLockGuard lock(display);
+                    GwScreens::GetInstance().ShowToast(ok ? "info" : "error", ok ? "Wake word changed" : "Wake word rejected",
+                                                       ok ? ("Say \"" + cw->GetWakeWordText() + "\"").c_str() : "Use two to four plain words");
                 });
             }
         } else if (strcmp(type->valuestring, "gw_video") == 0) {

@@ -12,12 +12,14 @@
                 "CONFIG_OTA_URL=\"https://watch-ota.24hourcoder.com/xiaozhi/ota/\"",
                 "CONFIG_PARTITION_TABLE_CUSTOM_FILENAME=\"partitions/v2/32m.csv\"",
                 "CONFIG_ESPTOOLPY_FLASHSIZE_32MB=y",
+                "CONFIG_IDF_EXPERIMENTAL_FEATURES=y",
+                "CONFIG_BOOTLOADER_CACHE_32BIT_ADDR_QUAD_FLASH=y",
                 "CONFIG_RECEIVE_CUSTOM_MESSAGE=y",
                 "CONFIG_LV_USE_TILEVIEW=y",
                 "CONFIG_USE_AFE_WAKE_WORD=n",
                 "CONFIG_USE_CUSTOM_WAKE_WORD=y",
-                "CONFIG_CUSTOM_WAKE_WORD=\"hey grayson\"",
-                "CONFIG_CUSTOM_WAKE_WORD_DISPLAY=\"Hey Grayson\"",
+                "CONFIG_CUSTOM_WAKE_WORD=\"hey coder\"",
+                "CONFIG_CUSTOM_WAKE_WORD_DISPLAY=\"Hey coder\"",
                 "CONFIG_CUSTOM_WAKE_WORD_THRESHOLD=20",
                 "CONFIG_SR_MN_EN_MULTINET6_QUANT=y"
             ]

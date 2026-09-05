@@ -7,15 +7,21 @@
 #include <esp_mn_iface.h>
 #include <esp_mn_models.h>
 #include <esp_mn_speech_commands.h>
+#include "settings.h"
+#include <cctype>
 #include <cJSON.h>
 
 #define TAG "CustomWakeWord"
 
+CustomWakeWord* CustomWakeWord::instance_ = nullptr;
+
 CustomWakeWord::CustomWakeWord()
     : wake_word_opus_() {
+    instance_ = this;
 }
 
 CustomWakeWord::~CustomWakeWord() {
+    if (instance_ == this) instance_ = nullptr;
     if (multinet_model_data_ != nullptr && multinet_ != nullptr) {
         multinet_->destroy(multinet_model_data_);
         multinet_model_data_ = nullptr;
@@ -103,6 +109,7 @@ bool CustomWakeWord::Initialize(AudioCodec* codec, srmodel_list_t* models_list) 
         ESP_LOGE(TAG, "Failed to initialize wakenet model");
         return false;
     }
+    ApplyStoredOverride();
 
     // 初始化 multinet (命令词识别)
     mn_name_ = esp_srmodel_filter(models_, ESP_MN_PREFIX, language_.c_str());
@@ -307,4 +314,82 @@ bool CustomWakeWord::GetWakeWordOpus(std::vector<uint8_t>& opus) {
     opus.swap(wake_word_opus_.front());
     wake_word_opus_.pop_front();
     return !opus.empty();
+}
+
+
+// ---- Grayson Work: runtime wake-word override ------------------------------------------
+
+std::string CustomWakeWord::DisplayName(const std::string& phrase) {
+    std::string out = phrase;
+    if (!out.empty()) out[0] = toupper(out[0]);
+    return out;
+}
+
+void CustomWakeWord::ApplyStoredOverride() {
+    Settings settings("wake_word", false);
+    std::string phrase = settings.GetString("phrase", "");
+    int threshold = settings.GetInt("threshold", 0);
+    if (phrase.empty()) {
+        return;
+    }
+    std::deque<Command> kept;
+    for (auto& c : commands_) {
+        if (c.action != "wake") kept.push_back(c);
+    }
+    kept.push_front({phrase, DisplayName(phrase), "wake"});
+    commands_ = std::move(kept);
+    if (threshold > 0 && threshold < 100) {
+        threshold_ = threshold / 100.0f;
+    }
+    ESP_LOGI(TAG, "Using stored wake word '%s' (threshold %.2f)", phrase.c_str(), threshold_);
+}
+
+std::string CustomWakeWord::GetWakeWordText() const {
+    for (auto& c : commands_) {
+        if (c.action == "wake") return c.text;
+    }
+    return "";
+}
+
+bool CustomWakeWord::SetWakeWord(const std::string& phrase_in, int threshold_pct) {
+    std::string phrase;
+    for (char ch : phrase_in) {
+        if (isalpha((unsigned char)ch) || ch == ' ') phrase += tolower((unsigned char)ch);
+    }
+    while (!phrase.empty() && phrase.back() == ' ') phrase.pop_back();
+    if (phrase.size() < 5 || phrase.find(' ') == std::string::npos) {
+        ESP_LOGW(TAG, "Rejecting wake word '%s' (need 2-4 plain words)", phrase_in.c_str());
+        return false;
+    }
+    {
+        Settings settings("wake_word", true);
+        settings.SetString("phrase", phrase);
+        if (threshold_pct > 0 && threshold_pct < 100) settings.SetInt("threshold", threshold_pct);
+    }
+    if (multinet_ == nullptr || multinet_model_data_ == nullptr) {
+        ESP_LOGW(TAG, "Wake word saved; multinet not initialised yet, applies at next boot");
+        return true;
+    }
+    // detect() runs under input_buffer_mutex_, so holding it makes re-registration safe.
+    std::lock_guard<std::mutex> lock(input_buffer_mutex_);
+    std::deque<Command> kept;
+    for (auto& c : commands_) {
+        if (c.action != "wake") kept.push_back(c);
+    }
+    kept.push_front({phrase, DisplayName(phrase), "wake"});
+    commands_ = std::move(kept);
+    if (threshold_pct > 0 && threshold_pct < 100) {
+        threshold_ = threshold_pct / 100.0f;
+        multinet_->set_det_threshold(multinet_model_data_, threshold_);
+    }
+    esp_mn_commands_clear();
+    for (int i = 0; i < commands_.size(); i++) {
+        esp_mn_commands_add(i + 1, commands_[i].command.c_str());
+    }
+    esp_mn_commands_update();
+    multinet_->clean(multinet_model_data_);
+    input_buffer_.clear();
+    multinet_->print_active_speech_commands(multinet_model_data_);
+    ESP_LOGI(TAG, "Wake word is now '%s' (threshold %.2f)", phrase.c_str(), threshold_);
+    return true;
 }

@@ -36,6 +36,11 @@ public:
     bool GetWakeWordOpus(std::vector<uint8_t>& opus);
     const std::string& GetLastDetectedWakeWord() const { return last_detected_wake_word_; }
 
+    // Grayson Work: runtime wake-word override (persisted in Settings("wake_word")).
+    static CustomWakeWord* Instance() { return instance_; }
+    bool SetWakeWord(const std::string& phrase, int threshold_pct);   // 0 = keep current threshold
+    std::string GetWakeWordText() const;
+
 private:
     struct Command {
         std::string command;
@@ -55,6 +60,9 @@ private:
     std::deque<Command> commands_;
  
     std::function<void(const std::string& wake_word)> wake_word_detected_callback_;
+    static CustomWakeWord* instance_;
+    void ApplyStoredOverride();
+    static std::string DisplayName(const std::string& phrase);
     AudioCodec* codec_ = nullptr;
     std::string last_detected_wake_word_;
     std::atomic<bool> running_ = false;

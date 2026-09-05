@@ -11,6 +11,7 @@ static lv_obj_t* Label(lv_obj_t* p, const char* txt, const lv_font_t* f, uint32_
 }
 lv_obj_t* GwScreens::Card(lv_obj_t* parent, uint32_t bg, int radius) {
     auto c = lv_obj_create(parent);
+    lv_obj_set_size(c, LV_SIZE_CONTENT, LV_SIZE_CONTENT);   // callers widen where needed
     lv_obj_set_style_bg_color(c, C(bg), 0); lv_obj_set_style_bg_opa(c, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(c, radius, 0); lv_obj_set_style_border_width(c, 0, 0);
     lv_obj_set_style_pad_all(c, 12, 0); lv_obj_set_scrollbar_mode(c, LV_SCROLLBAR_MODE_OFF);
@@ -184,7 +185,9 @@ void GwScreens::SetClock(const char* hhmm, const char* date) {
     if (dash_clock_) lv_label_set_text(dash_clock_, hhmm);
 }
 void GwScreens::SetBattery(int pct, bool charging) {
-    if (face_batt_) lv_label_set_text_fmt(face_batt_, "%s%d%%", charging ? "+" : "", pct);
+    if (!face_batt_) return;
+    if (pct <= 0 && !charging) lv_label_set_text(face_batt_, "USB");
+    else lv_label_set_text_fmt(face_batt_, "%s%d%%", charging ? "+" : "", pct);
 }
 void GwScreens::SetHubState(bool online, bool lan) {
     if (!face_hub_dot_) return;

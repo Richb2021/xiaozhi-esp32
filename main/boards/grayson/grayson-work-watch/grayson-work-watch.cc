@@ -215,8 +215,17 @@ private:
         power_save_timer_->OnExitSleepMode([this]() {
             GetDisplay()->SetPowerSaveMode(false);
             GetBacklight()->RestoreBrightness(); });
-        power_save_timer_->OnShutdownRequest([this](){ 
-            pmic_->PowerOff(); });
+        power_save_timer_->OnShutdownRequest([this]() {
+            // Only power off when genuinely running down a battery; on USB (no battery, or charging) stay on.
+            int level = 0; bool charging = false, discharging = false;
+            GetBatteryLevel(level, charging, discharging);
+            if (discharging && level > 0) {
+                pmic_->PowerOff();
+            } else {
+                static bool logged = false;
+                if (!logged) { ESP_LOGI(TAG, "Idle shutdown skipped: on USB power"); logged = true; }
+            }
+        });
         power_save_timer_->SetEnabled(true);
     }
 
@@ -421,6 +430,10 @@ public:
         }
 
         level = pmic_->GetBatteryLevel();
+        if (level <= 0 && !charging) {
+            // No battery fitted (USB powered): don't report discharging, which would show the low-battery popup
+            discharging = false;
+        }
         return true;
     }
 

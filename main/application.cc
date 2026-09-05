@@ -744,10 +744,12 @@ void Application::InitializeProtocol() {
         } else if (strcmp(type->valuestring, "gw_config") == 0) {
             auto ww = cJSON_GetObjectItem(root, "wake_word");
             auto th = cJSON_GetObjectItem(root, "wake_threshold");
-            if (cJSON_IsString(ww)) {
-                Schedule([display, phrase = std::string(ww->valuestring), thr = cJSON_IsNumber(th) ? (int)th->valuedouble : 0]() {
+            if (cJSON_IsString(ww) || cJSON_IsNumber(th)) {
+                Schedule([display, phrase = std::string(cJSON_IsString(ww) ? ww->valuestring : ""), thr = cJSON_IsNumber(th) ? (int)th->valuedouble : 0]() {
                     auto cw = CustomWakeWord::Instance();
-                    bool ok = cw != nullptr && cw->SetWakeWord(phrase, thr);
+                    // threshold-only messages keep the current phrase
+                    std::string p = phrase.empty() && cw ? cw->GetWakeWordText() : phrase;
+                    bool ok = cw != nullptr && cw->SetWakeWord(p, thr);
                     DisplayLockGuard lock(display);
                     GwScreens::GetInstance().ShowToast(ok ? "info" : "error", ok ? "Wake word changed" : "Wake word rejected",
                                                        ok ? ("Say \"" + cw->GetWakeWordText() + "\"").c_str() : "Use two to four plain words");

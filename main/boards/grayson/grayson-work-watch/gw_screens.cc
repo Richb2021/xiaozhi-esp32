@@ -1,6 +1,7 @@
 #include "gw_screens.h"
 #include "gw_theme.h"
 #include <esp_log.h>
+#include <cstring>
 #define TAG "GwScreens"
 using namespace gw;
 
@@ -173,4 +174,26 @@ void GwScreens::SetHubState(bool online, bool lan) {
 }
 void GwScreens::GoTo(int tile) { if (tileview_) lv_tileview_set_tile_by_index(tileview_, tile, 0, LV_ANIM_ON); }
 
-void GwScreens::ShowToast(const char* level, const char* title, const char* body) { ESP_LOGI(TAG, "toast %s: %s — %s", level, title, body); }
+void GwScreens::ShowToast(const char* level, const char* title, const char* body) {
+    auto screen = lv_screen_active();
+    if (!toast_) {
+        toast_ = Card(screen, PANEL, 28); lv_obj_set_size(toast_, LV_HOR_RES - 36, LV_SIZE_CONTENT);
+        lv_obj_align(toast_, LV_ALIGN_BOTTOM_MID, 0, -26); lv_obj_set_style_pad_all(toast_, 18, 0);
+        lv_obj_set_style_border_width(toast_, 2, 0); lv_obj_set_style_border_color(toast_, C(GOLD), 0);
+        lv_obj_set_flex_flow(toast_, LV_FLEX_FLOW_COLUMN); lv_obj_set_style_pad_row(toast_, 8, 0);
+        toast_kind_ = Label(toast_, "", &font_space_mono_14, GRASS);
+        toast_title_ = Label(toast_, "", &font_archivo_bold_22, INK); lv_label_set_long_mode(toast_title_, LV_LABEL_LONG_WRAP); lv_obj_set_width(toast_title_, LV_PCT(100));
+        toast_body_ = Label(toast_, "", &font_space_mono_14, INK_DIM); lv_label_set_long_mode(toast_body_, LV_LABEL_LONG_WRAP); lv_obj_set_width(toast_body_, LV_PCT(100));
+        lv_obj_add_flag(toast_, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(toast_, [](lv_event_t* e) { lv_obj_add_flag(static_cast<lv_obj_t*>(lv_event_get_target(e)), LV_OBJ_FLAG_HIDDEN); }, LV_EVENT_CLICKED, nullptr);
+    }
+    uint32_t kind_color = GRASS; const char* kind = "JOB DONE";
+    if (strcmp(level, "warn") == 0) { kind_color = EMBER; kind = "NEEDS INPUT"; }
+    else if (strcmp(level, "error") == 0) { kind_color = DANGER; kind = "FAILED"; }
+    lv_label_set_text(toast_kind_, kind); lv_obj_set_style_text_color(toast_kind_, C(kind_color), 0);
+    lv_label_set_text(toast_title_, title); lv_label_set_text(toast_body_, body);
+    lv_obj_remove_flag(toast_, LV_OBJ_FLAG_HIDDEN); lv_obj_move_foreground(toast_);
+    if (toast_timer_) lv_timer_delete(toast_timer_);
+    toast_timer_ = lv_timer_create([](lv_timer_t* t) { auto self = static_cast<GwScreens*>(lv_timer_get_user_data(t)); lv_obj_add_flag(self->toast_, LV_OBJ_FLAG_HIDDEN); self->toast_timer_ = nullptr; lv_timer_delete(t); }, 12000, this);
+    lv_timer_set_repeat_count(toast_timer_, 1);
+}

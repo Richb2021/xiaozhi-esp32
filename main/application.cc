@@ -732,6 +732,13 @@ void Application::InitializeProtocol() {
                 }
             });
             cJSON_free(dup);
+        } else if (strcmp(type->valuestring, "gw_alert") == 0) {
+            auto level = cJSON_GetObjectItem(root, "level"); auto title = cJSON_GetObjectItem(root, "title"); auto body = cJSON_GetObjectItem(root, "body");
+            if (cJSON_IsString(level) && cJSON_IsString(title)) {
+                Schedule([display, l = std::string(level->valuestring), t = std::string(title->valuestring), b = std::string(cJSON_IsString(body) ? body->valuestring : "")]() {
+                    DisplayLockGuard lock(display); GwScreens::GetInstance().ShowToast(l.c_str(), t.c_str(), b.c_str());
+                });
+            }
 #endif
         } else {
             ESP_LOGW(TAG, "Unknown message type: %s", type->valuestring);

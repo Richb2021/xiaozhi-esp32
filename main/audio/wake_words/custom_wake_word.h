@@ -38,7 +38,9 @@ public:
 
     // Grayson Work: runtime wake-word override (persisted in Settings("wake_word")).
     static CustomWakeWord* Instance() { return instance_; }
-    bool SetWakeWord(const std::string& phrase, int threshold_pct);   // 0 = keep current threshold
+    bool SetWakeWord(const std::string& phrase, int threshold_pct);   // 0 = keep current threshold (rebuilds the command graph)
+    void SetThreshold(int threshold_pct);                              // cheap: no graph rebuild
+    void SaveWakeWordForNextBoot(const std::string& phrase, int threshold_pct);
     std::string GetWakeWordText() const;
 
 private:

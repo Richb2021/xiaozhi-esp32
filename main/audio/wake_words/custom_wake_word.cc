@@ -199,6 +199,10 @@ void CustomWakeWord::FeedSamples(const int16_t* data, size_t samples, bool mono)
                 ESP_LOGI(TAG, "Custom wake word detected: command_id=%d, string=%s, prob=%f", 
                         mn_result->command_id[i], mn_result->string, mn_result->prob[i]);
                 auto& command = commands_[mn_result->command_id[i] - 1];
+                if (mn_result->prob[i] < threshold_) {
+                    ESP_LOGI(TAG, "Ignoring '%s' below threshold %.2f", command.command.c_str(), threshold_);
+                    continue;
+                }
                 if (command.action == "wake") {
                     last_detected_wake_word_ = command.text;
                     running_ = false;
@@ -392,4 +396,25 @@ bool CustomWakeWord::SetWakeWord(const std::string& phrase_in, int threshold_pct
     multinet_->print_active_speech_commands(multinet_model_data_);
     ESP_LOGI(TAG, "Wake word is now '%s' (threshold %.2f)", phrase.c_str(), threshold_);
     return true;
+}
+
+void CustomWakeWord::SetThreshold(int threshold_pct) {
+    if (threshold_pct <= 0 || threshold_pct >= 100) return;
+    {
+        Settings settings("wake_word", true);
+        settings.SetInt("threshold", threshold_pct);
+    }
+    threshold_ = threshold_pct / 100.0f;
+    if (multinet_ && multinet_model_data_) {
+        std::lock_guard<std::mutex> lock(input_buffer_mutex_);
+        multinet_->set_det_threshold(multinet_model_data_, threshold_);
+    }
+    ESP_LOGI(TAG, "Wake word threshold now %.2f", threshold_);
+}
+
+void CustomWakeWord::SaveWakeWordForNextBoot(const std::string& phrase, int threshold_pct) {
+    Settings settings("wake_word", true);
+    settings.SetString("phrase", phrase);
+    if (threshold_pct > 0 && threshold_pct < 100) settings.SetInt("threshold", threshold_pct);
+    ESP_LOGI(TAG, "Wake word '%s' saved; applies when idle or at next boot", phrase.c_str());
 }

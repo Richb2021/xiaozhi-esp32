@@ -745,11 +745,23 @@ void Application::InitializeProtocol() {
             auto ww = cJSON_GetObjectItem(root, "wake_word");
             auto th = cJSON_GetObjectItem(root, "wake_threshold");
             if (cJSON_IsString(ww) || cJSON_IsNumber(th)) {
-                Schedule([display, phrase = std::string(cJSON_IsString(ww) ? ww->valuestring : ""), thr = cJSON_IsNumber(th) ? (int)th->valuedouble : 0]() {
+                Schedule([this, display, phrase = std::string(cJSON_IsString(ww) ? ww->valuestring : ""), thr = cJSON_IsNumber(th) ? (int)th->valuedouble : 0]() {
                     auto cw = CustomWakeWord::Instance();
-                    // threshold-only messages keep the current phrase
-                    std::string p = phrase.empty() && cw ? cw->GetWakeWordText() : phrase;
-                    bool ok = cw != nullptr && cw->SetWakeWord(p, thr);
+                    if (cw == nullptr) return;
+                    std::string current = cw->GetWakeWordText();
+                    std::string lc = phrase; for (auto& ch : lc) ch = tolower(ch);
+                    std::string lcur = current; for (auto& ch : lcur) ch = tolower(ch);
+                    if (phrase.empty() || lc == lcur) {
+                        // Same phrase: only the threshold changes, which is cheap and safe mid-session.
+                        cw->SetThreshold(thr);
+                        return;
+                    }
+                    if (GetDeviceState() != kDeviceStateIdle) {
+                        // Rebuilding the command graph is heavy; never do it while a session is live.
+                        cw->SaveWakeWordForNextBoot(phrase, thr);
+                        return;
+                    }
+                    bool ok = cw->SetWakeWord(phrase, thr);
                     DisplayLockGuard lock(display);
                     GwScreens::GetInstance().ShowToast(ok ? "info" : "error", ok ? "Wake word changed" : "Wake word rejected",
                                                        ok ? ("Say \"" + cw->GetWakeWordText() + "\"").c_str() : "Use two to four plain words");

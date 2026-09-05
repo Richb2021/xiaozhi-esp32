@@ -127,6 +127,8 @@ public:
     bool IsAfeWakeWord();
 
     void EnableWakeWordDetection(bool enable);
+    void SetWakeWordMuted(bool muted);          // Grayson Work: sleep toggle
+    bool IsWakeWordMuted() const { return wake_word_muted_; }
     void ReleaseWakeWordResources();
     void EnableVoiceProcessing(bool enable);
     void EnableAudioTesting(bool enable);
@@ -186,6 +188,7 @@ private:
     std::deque<uint32_t> timestamp_queue_;
 
     bool audio_engine_initialized_ = false;
+    bool wake_word_muted_ = false;
     bool voice_detected_ = false;
 #if CONFIG_USE_DEVICE_AEC
     bool device_aec_enabled_ = true;

@@ -122,6 +122,26 @@ public:
         lv_obj_set_style_radius(lv_screen_active(), 0, 0);
         // Face / Dashboard / Voice tiles; the stock chat container becomes the Voice tile
         GwScreens::GetInstance().Build(lv_screen_active(), container_);
+        // The stock chat UI lives in layers on the screen (default message style); move the
+        // conversational ones into the Voice tile so the Face and Dashboard tiles stay clean.
+        auto voice_tile = GwScreens::GetInstance().voice_tile();
+        for (lv_obj_t* layer : {top_bar_, emoji_box_, preview_image_, bottom_bar_}) {
+            if (layer) lv_obj_set_parent(layer, voice_tile);
+        }
+        if (emoji_box_) lv_obj_align(emoji_box_, LV_ALIGN_CENTER, 0, -30);
+        if (bottom_bar_) lv_obj_align(bottom_bar_, LV_ALIGN_BOTTOM_MID, 0, 0);
+        if (top_bar_) lv_obj_align(top_bar_, LV_ALIGN_TOP_MID, 0, 0);
+        GwScreens::GetInstance().OnStopTap([]() {
+            auto& app = Application::GetInstance();
+            if (app.GetDeviceState() != kDeviceStateIdle) app.EndConversation();
+        });
+        GwScreens::GetInstance().OnSleepTap([]() {
+            auto& svc = Application::GetInstance().GetAudioService();
+            bool muted = !svc.IsWakeWordMuted();
+            svc.SetWakeWordMuted(muted);
+            GwScreens::GetInstance().SetSleeping(muted);
+        });
+        GwScreens::GetInstance().DumpGeometry();
         // Tap anywhere on the Voice tile to start/stop listening (same as the boot button)
         auto voice = GwScreens::GetInstance().voice_tile();
         lv_obj_add_flag(voice, LV_OBJ_FLAG_CLICKABLE);
@@ -173,9 +193,13 @@ private:
             int level = 0;
             bool charging = false, discharging = false;
             self->GetBatteryLevel(level, charging, discharging);
+            auto& app = Application::GetInstance();
+            bool active = app.GetDeviceState() == kDeviceStateListening || app.GetDeviceState() == kDeviceStateSpeaking ||
+                          app.GetDeviceState() == kDeviceStateConnecting;
             DisplayLockGuard lock(self->GetDisplay());
             GwScreens::GetInstance().SetClock(t.tm_year > 100 ? hhmm : "--:--", t.tm_year > 100 ? date : "");
             GwScreens::GetInstance().SetBattery(level, charging);
+            GwScreens::GetInstance().SetConversationActive(active);
         };
         args.arg = this;
         args.name = "gw_clock";

@@ -24,6 +24,11 @@ public:
     void SetHubState(bool online, bool lan);
     void ShowToast(const char* level, const char* title, const char* body);
     void GoTo(int tile);                          // 0 face, 1 dashboard, 2 voice
+    void DumpGeometry();                          // log tile/child geometry (diagnostics)
+    void SetConversationActive(bool active);      // shows the Stop pill on the Voice tile
+    void SetSleeping(bool sleeping);              // reflects wake-word mute on the Face tile
+    void OnStopTap(void (*cb)()) { stop_cb_ = cb; }
+    void OnSleepTap(void (*cb)()) { sleep_cb_ = cb; }
     lv_obj_t* voice_tile() const { return voice_tile_; }
     // Full-screen video overlay (call with the LVGL lock held)
     void ShowVideoFrame(std::unique_ptr<LvglImage> frame);
@@ -47,5 +52,8 @@ private:
     std::unique_ptr<LvglImage> video_frames_[2];
     int video_frame_idx_ = 0;
     void (*video_tap_cb_)() = nullptr;
+    lv_obj_t *stop_pill_ = nullptr, *sleep_pill_ = nullptr, *sleep_label_ = nullptr;
+    void (*stop_cb_)() = nullptr;
+    void (*sleep_cb_)() = nullptr;
     DashboardModel model_;
 };

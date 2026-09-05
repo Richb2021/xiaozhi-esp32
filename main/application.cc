@@ -817,6 +817,17 @@ void Application::DismissAlert() {
 
 void Application::ToggleChatState() { xEventGroupSetBits(event_group_, MAIN_EVENT_TOGGLE_CHAT); }
 
+void Application::EndConversation() {
+    Schedule([this]() {
+        if (GetDeviceState() == kDeviceStateSpeaking) {
+            AbortSpeaking(kAbortReasonNone);
+        }
+        if (protocol_ != nullptr) {
+            protocol_->CloseAudioChannel();
+        }
+    });
+}
+
 void Application::StartListening() { xEventGroupSetBits(event_group_, MAIN_EVENT_START_LISTENING); }
 
 void Application::StopListening() { xEventGroupSetBits(event_group_, MAIN_EVENT_STOP_LISTENING); }

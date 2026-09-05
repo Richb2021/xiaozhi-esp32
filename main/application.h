@@ -95,6 +95,7 @@ public:
      * Sends MAIN_EVENT_TOGGLE_CHAT to be handled in Run()
      */
     void ToggleChatState();
+    void EndConversation();   // Grayson Work: on-screen Stop — abort speech and close the channel
 
     /**
      * Start listening (event-based, thread-safe)

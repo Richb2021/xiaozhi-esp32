@@ -636,8 +636,17 @@ std::unique_ptr<AudioStreamPacket> AudioService::PopWakeWordPacket() {
     return nullptr;
 }
 
+void AudioService::SetWakeWordMuted(bool muted) {
+    wake_word_muted_ = muted;
+    ESP_LOGI(TAG, "Wake word %s", muted ? "muted (sleep)" : "unmuted");
+    EnableWakeWordDetection(!muted);
+}
+
 void AudioService::EnableWakeWordDetection(bool enable) {
     ESP_LOGD(TAG, "%s wake word detection", enable ? "Enabling" : "Disabling");
+    if (enable && wake_word_muted_) {
+        enable = false;
+    }
     if (enable) {
         if (!InitializeAudioEngine()) {
             xEventGroupClearBits(event_group_, AS_EVENT_WAKE_WORD_RUNNING);

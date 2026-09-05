@@ -42,6 +42,16 @@ void GwScreens::Build(lv_obj_t* screen, lv_obj_t* voice_container) {
     BuildDashboard(dash_tile_);
     lv_obj_set_parent(voice_container, voice_tile_);
     lv_obj_set_size(voice_container, LV_HOR_RES, LV_VER_RES);
+    stop_pill_ = Card(voice_tile_, DANGER, 999);
+    lv_obj_set_size(stop_pill_, 150, 52);
+    lv_obj_align(stop_pill_, LV_ALIGN_BOTTOM_MID, 0, -70);
+    lv_obj_add_flag(stop_pill_, (lv_obj_flag_t)(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_HIDDEN));
+    auto stop_label = Label(stop_pill_, "STOP", &font_archivo_bold_22, INK);
+    lv_obj_center(stop_label);
+    lv_obj_add_event_cb(stop_pill_, [](lv_event_t* e) {
+        auto self = static_cast<GwScreens*>(lv_event_get_user_data(e));
+        if (self->stop_cb_) self->stop_cb_();
+    }, LV_EVENT_CLICKED, this);
     lv_obj_move_background(tileview_);
     lv_tileview_set_tile_by_index(tileview_, 1, 0, LV_ANIM_OFF);
 }
@@ -77,6 +87,15 @@ void GwScreens::BuildFace(lv_obj_t* t) {
     auto pill2 = Card(pills, PANEL_LIGHT, 999); lv_obj_set_style_pad_ver(pill2, 8, 0); lv_obj_set_style_pad_hor(pill2, 16, 0);
     lv_obj_set_style_border_width(pill2, 1, 0); lv_obj_set_style_border_color(pill2, C(EMBER), 0);
     face_wait_pill_ = Label(pill2, "0 waiting", &font_space_mono_14, EMBER); lv_obj_add_flag(pill2, LV_OBJ_FLAG_HIDDEN);
+    sleep_pill_ = Card(bottom, PANEL, 999);
+    lv_obj_set_style_pad_ver(sleep_pill_, 10, 0); lv_obj_set_style_pad_hor(sleep_pill_, 22, 0);
+    lv_obj_set_style_border_width(sleep_pill_, 1, 0); lv_obj_set_style_border_color(sleep_pill_, C(LINE), 0);
+    lv_obj_add_flag(sleep_pill_, LV_OBJ_FLAG_CLICKABLE);
+    sleep_label_ = Label(sleep_pill_, "SLEEP", &font_space_mono_14, INK_DIM);
+    lv_obj_add_event_cb(sleep_pill_, [](lv_event_t* e) {
+        auto self = static_cast<GwScreens*>(lv_event_get_user_data(e));
+        if (self->sleep_cb_) self->sleep_cb_();
+    }, LV_EVENT_CLICKED, this);
     auto wm = Label(bottom, "G R A Y S O N   W O R K", &font_space_mono_14, GOLD);
     lv_obj_set_style_text_letter_space(wm, 2, 0);
 }
@@ -234,4 +253,37 @@ void GwScreens::HideVideo() {
     }
     video_frames_[0].reset();
     video_frames_[1].reset();
+}
+
+static void DumpObj(const char* name, lv_obj_t* o) {
+    if (!o) { ESP_LOGI(TAG, "%s: null", name); return; }
+    lv_obj_update_layout(o);
+    ESP_LOGI(TAG, "%s: x=%d y=%d w=%d h=%d children=%u hidden=%d", name, (int)lv_obj_get_x(o), (int)lv_obj_get_y(o),
+             (int)lv_obj_get_width(o), (int)lv_obj_get_height(o), (unsigned)lv_obj_get_child_count(o),
+             lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN) ? 1 : 0);
+}
+
+void GwScreens::DumpGeometry() {
+    DumpObj("tileview", tileview_);
+    DumpObj("face_tile", face_tile_);
+    DumpObj("dash_tile", dash_tile_);
+    DumpObj("voice_tile", voice_tile_);
+    DumpObj("face_clock", face_clock_);
+    DumpObj("hc_card", hc_card_);
+    DumpObj("jobs_list", jobs_list_);
+    DumpObj("screen", lv_screen_active());
+}
+
+void GwScreens::SetConversationActive(bool active) {
+    if (!stop_pill_) return;
+    if (active) { lv_obj_remove_flag(stop_pill_, LV_OBJ_FLAG_HIDDEN); lv_obj_move_foreground(stop_pill_); }
+    else lv_obj_add_flag(stop_pill_, LV_OBJ_FLAG_HIDDEN);
+}
+
+void GwScreens::SetSleeping(bool sleeping) {
+    if (!sleep_pill_) return;
+    lv_label_set_text(sleep_label_, sleeping ? "SLEEPING · TAP TO WAKE" : "SLEEP");
+    lv_obj_set_style_text_color(sleep_label_, C(sleeping ? EMBER : INK_DIM), 0);
+    lv_obj_set_style_border_color(sleep_pill_, C(sleeping ? EMBER : LINE), 0);
+    if (face_hub_dot_ && sleeping) lv_obj_set_style_bg_color(face_hub_dot_, C(EMBER), 0);
 }

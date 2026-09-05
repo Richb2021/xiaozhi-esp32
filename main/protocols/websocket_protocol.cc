@@ -1,4 +1,5 @@
 #include "websocket_protocol.h"
+#include <vector>
 #include "application.h"
 #include "board.h"
 #include "settings.h"
@@ -79,6 +80,7 @@ void WebsocketProtocol::CloseAudioChannel(bool send_goodbye) {
 bool WebsocketProtocol::OpenAudioChannel() {
     Settings settings("websocket", false);
     std::string url = settings.GetString("url");
+    std::string lan_url = settings.GetString("lan_url");  // Grayson Work: LAN hub first, public relay second
     std::string token = settings.GetString("token");
     int version = settings.GetInt("version");
     if (version != 0) {
@@ -94,6 +96,7 @@ bool WebsocketProtocol::OpenAudioChannel() {
         return false;
     }
 
+    auto setup_socket = [this, &token]() {
     if (!token.empty()) {
         // If token not has a space, add "Bearer " prefix
         if (token.find(" ") == std::string::npos) {
@@ -165,9 +168,36 @@ bool WebsocketProtocol::OpenAudioChannel() {
         }
     });
 
-    ESP_LOGI(TAG, "Connecting to websocket server: %s with version: %d", url.c_str(), version_);
-    if (!websocket_->Connect(url.c_str())) {
-        ESP_LOGE(TAG, "Failed to connect to websocket server, code=%d", websocket_->GetLastError());
+    };
+    setup_socket();
+
+    // Grayson Work: try the LAN hub first (fast on the home network), then the public relay.
+    std::vector<std::string> candidates;
+    if (!lan_url.empty()) {
+        candidates.push_back(lan_url);
+    }
+    candidates.push_back(url);
+    bool connected = false;
+    for (size_t i = 0; i < candidates.size(); i++) {
+        if (i > 0) {
+            websocket_.reset();
+            websocket_ = network->CreateWebSocket(1);
+            if (websocket_ == nullptr) {
+                ESP_LOGE(TAG, "Failed to create websocket");
+                return false;
+            }
+            setup_socket();
+        }
+        ESP_LOGI(TAG, "Connecting to websocket server: %s with version: %d", candidates[i].c_str(), version_);
+        if (websocket_->Connect(candidates[i].c_str())) {
+            connected = true;
+            connected_to_lan_ = (!lan_url.empty() && i == 0);
+            break;
+        }
+        ESP_LOGW(TAG, "Failed to connect to %s, code=%d", candidates[i].c_str(), websocket_->GetLastError());
+    }
+    if (!connected) {
+        ESP_LOGE(TAG, "Failed to connect to any websocket server");
         SetError(Lang::Strings::SERVER_NOT_CONNECTED);
         return false;
     }

@@ -1,0 +1,19 @@
+{
+    "manufacturer": "grayson",
+    "type": "grayson-work-watch",
+    "target": "esp32s3",
+    "builds": [
+        {
+            "name": "grayson-work-watch",
+            "sdkconfig_append": [
+                "CONFIG_USE_WECHAT_MESSAGE_STYLE=n",
+                "CONFIG_USE_DEVICE_AEC=y",
+                "CONFIG_LANGUAGE_EN_US=y",
+                "CONFIG_OTA_URL=\"https://watch-ota.24hourcoder.com/xiaozhi/ota/\"",
+                "CONFIG_PARTITION_TABLE_CUSTOM_FILENAME=\"partitions/v2/32m.csv\"",
+                "CONFIG_ESPTOOLPY_FLASHSIZE_32MB=y",
+                "CONFIG_RECEIVE_CUSTOM_MESSAGE=y"
+            ]
+        }
+    ]
+}

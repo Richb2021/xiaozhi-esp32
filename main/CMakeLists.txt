@@ -336,6 +336,11 @@ elseif(CONFIG_BOARD_TYPE_WAVESHARE_ESP32_S3_TOUCH_AMOLED_2_06)
     set(BUILTIN_TEXT_FONT font_noto_sans_basic_30_4)
     set(BUILTIN_ICON_FONT font_material_symbols_30_4)
     set(DEFAULT_EMOJI_COLLECTION noto-color-emoji_64)
+elseif(CONFIG_BOARD_TYPE_GRAYSON_WORK_WATCH)
+    set(BOARD_DIR "grayson/grayson-work-watch")
+    set(BUILTIN_TEXT_FONT font_noto_sans_basic_30_4)
+    set(BUILTIN_ICON_FONT font_material_symbols_30_4)
+    set(DEFAULT_EMOJI_COLLECTION noto-color-emoji_64)
 elseif(CONFIG_BOARD_TYPE_WAVESHARE_ESP32_C6_TOUCH_AMOLED_2_06)
     set(BOARD_DIR "waveshare/esp32-c6-touch-amoled-2.06")
     set(BUILTIN_TEXT_FONT font_noto_sans_basic_30_4)
@@ -878,6 +883,8 @@ endif()
 file(GLOB BOARD_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_DIR}/*.cc
     ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_DIR}/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_DIR}/fonts/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_DIR}/assets/*.c
 )
 list(APPEND SOURCES ${BOARD_SOURCES})
 

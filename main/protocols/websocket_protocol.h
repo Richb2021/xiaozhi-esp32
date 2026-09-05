@@ -12,6 +12,7 @@
 
 class WebsocketProtocol : public Protocol {
 public:
+    bool IsConnectedToLan() const { return connected_to_lan_; }
     WebsocketProtocol();
     ~WebsocketProtocol();
 
@@ -25,6 +26,7 @@ private:
     EventGroupHandle_t event_group_handle_;
     std::unique_ptr<WebSocket> websocket_;
     int version_ = 1;
+    bool connected_to_lan_ = false;
 
     void ParseServerHello(const cJSON* root);
     bool SendText(const std::string& text) override;

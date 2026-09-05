@@ -18,6 +18,9 @@
 #include <driver/spi_master.h>
 #include "settings.h"
 #include "gw_theme.h"
+#include "gw_screens.h"
+#include <ctime>
+#include <cstdlib>
 
 #include <esp_lcd_touch_ft5x06.h>
 #include <esp_lvgl_port.h>
@@ -117,6 +120,8 @@ public:
         lv_obj_set_style_pad_right(status_bar_, LV_HOR_RES*  0.1, 0);
         lv_display_add_event_cb(display_, rounder_event_cb, LV_EVENT_INVALIDATE_AREA, NULL);
         lv_obj_set_style_radius(lv_screen_active(), 0, 0);
+        // Face / Dashboard / Voice tiles; the stock chat container becomes the Voice tile
+        GwScreens::GetInstance().Build(lv_screen_active(), container_);
     }
 };
 
@@ -147,6 +152,30 @@ private:
     CustomLcdDisplay* display_;
     CustomBacklight* backlight_;
     PowerSaveTimer* power_save_timer_;
+    esp_timer_handle_t clock_timer_ = nullptr;
+
+    void InitializeClockTimer() {
+        esp_timer_create_args_t args = {};
+        args.callback = [](void* arg) {
+            auto self = static_cast<GraysonWorkWatch*>(arg);
+            time_t now = time(nullptr);
+            struct tm t;
+            localtime_r(&now, &t);
+            char hhmm[8], date[24];
+            strftime(hhmm, sizeof hhmm, "%H:%M", &t);
+            strftime(date, sizeof date, "%a %d %b", &t);
+            int level = 0;
+            bool charging = false, discharging = false;
+            self->GetBatteryLevel(level, charging, discharging);
+            DisplayLockGuard lock(self->GetDisplay());
+            GwScreens::GetInstance().SetClock(t.tm_year > 100 ? hhmm : "--:--", t.tm_year > 100 ? date : "");
+            GwScreens::GetInstance().SetBattery(level, charging);
+        };
+        args.arg = this;
+        args.name = "gw_clock";
+        ESP_ERROR_CHECK(esp_timer_create(&args, &clock_timer_));
+        ESP_ERROR_CHECK(esp_timer_start_periodic(clock_timer_, 1000000));
+    }
 
     void InitializePowerSaveTimer() {
         power_save_timer_ = new PowerSaveTimer(-1, 60, 300);
@@ -321,6 +350,9 @@ public:
         InitializeTouch();
         InitializeButtons();
         InitializeTools();
+        setenv("TZ", "GMT0BST,M3.5.0/1,M10.5.0", 1);  // UK local time for the face
+        tzset();
+        InitializeClockTimer();
     }
 
     virtual AudioCodec* GetAudioCodec() override {

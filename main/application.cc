@@ -10,6 +10,9 @@
 #include "system_info.h"
 #include "text_glyph_payload.h"
 #include "websocket_protocol.h"
+#if CONFIG_BOARD_TYPE_GRAYSON_WORK_WATCH
+#include "boards/grayson/grayson-work-watch/gw_screens.h"
+#endif
 
 #include <driver/gpio.h>
 #include <esp_log.h>
@@ -547,6 +550,14 @@ void Application::InitializeProtocol() {
     });
 
     protocol_->OnAudioChannelOpened([this, codec, &board]() {
+#if CONFIG_BOARD_TYPE_GRAYSON_WORK_WATCH
+        {
+            auto ws = dynamic_cast<WebsocketProtocol*>(protocol_.get());
+            auto display = Board::GetInstance().GetDisplay();
+            DisplayLockGuard lock(display);
+            GwScreens::GetInstance().SetHubState(true, ws != nullptr && ws->IsConnectedToLan());
+        }
+#endif
         board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
         if (protocol_->server_sample_rate() != codec->output_sample_rate()) {
             ESP_LOGW(TAG,
@@ -557,6 +568,13 @@ void Application::InitializeProtocol() {
     });
 
     protocol_->OnAudioChannelClosed([this, &board]() {
+#if CONFIG_BOARD_TYPE_GRAYSON_WORK_WATCH
+        {
+            auto display = Board::GetInstance().GetDisplay();
+            DisplayLockGuard lock(display);
+            GwScreens::GetInstance().SetHubState(false, false);
+        }
+#endif
         board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
         Schedule([this]() {
             auto display = Board::GetInstance().GetDisplay();
@@ -701,6 +719,19 @@ void Application::InitializeProtocol() {
             } else {
                 ESP_LOGW(TAG, "Invalid custom message format: missing payload");
             }
+#endif
+#if CONFIG_BOARD_TYPE_GRAYSON_WORK_WATCH
+        } else if (strcmp(type->valuestring, "gw_dashboard") == 0) {
+            char* dup = cJSON_PrintUnformatted(root);
+            Schedule([display, json = std::string(dup)]() {
+                cJSON* r = cJSON_Parse(json.c_str());
+                if (r) {
+                    DisplayLockGuard lock(display);
+                    GwScreens::GetInstance().UpdateDashboard(r);
+                    cJSON_Delete(r);
+                }
+            });
+            cJSON_free(dup);
 #endif
         } else {
             ESP_LOGW(TAG, "Unknown message type: %s", type->valuestring);

@@ -15,6 +15,7 @@
                 "CONFIG_IDF_EXPERIMENTAL_FEATURES=y",
                 "CONFIG_BOOTLOADER_CACHE_32BIT_ADDR_QUAD_FLASH=y",
                 "CONFIG_RECEIVE_CUSTOM_MESSAGE=y",
+                "CONFIG_USE_MULTILINE_CHAT_MESSAGE=y",
                 "CONFIG_LV_USE_TILEVIEW=y",
                 "CONFIG_USE_AFE_WAKE_WORD=n",
                 "CONFIG_USE_CUSTOM_WAKE_WORD=y",

@@ -55,6 +55,18 @@ public:
         WriteReg(0x61, 0x02); // set Main battery precharge current to 50mA
         WriteReg(0x62, 0x0A); // set Main battery charger current to 400mA ( 0x08-200mA, 0x09-300mA, 0x0A-400mA )
         WriteReg(0x63, 0x01); // set Main battery term charge current to 25mA
+
+        WriteReg(0x41, 0x0C); // IRQ enable 1: PWRON short press (bit3) and long press (bit2)
+        WriteReg(0x49, 0xFF); // clear any pending PWRON flags
+    }
+
+    // Poll the PWR key: 1 = short press, 2 = long press (hardware still powers off after 4 s)
+    int PollKey() {
+        uint8_t st = ReadReg(0x49);
+        if (st) WriteReg(0x49, st);
+        if (st & 0x08) return 1;
+        if (st & 0x04) return 2;
+        return 0;
     }
 };
 
@@ -116,38 +128,37 @@ public:
         SpiLcdDisplay::SetupUI();
 
         DisplayLockGuard lock(this);
-        lv_obj_set_style_pad_left(status_bar_, LV_HOR_RES*  0.1, 0);
-        lv_obj_set_style_pad_right(status_bar_, LV_HOR_RES*  0.1, 0);
         lv_display_add_event_cb(display_, rounder_event_cb, LV_EVENT_INVALIDATE_AREA, NULL);
         lv_obj_set_style_radius(lv_screen_active(), 0, 0);
-        // Face / Dashboard / Voice tiles; the stock chat container becomes the Voice tile
-        GwScreens::GetInstance().Build(lv_screen_active(), container_);
-        // The stock chat UI lives in layers on the screen (default message style); move the
-        // conversational ones into the Voice tile so the Face and Dashboard tiles stay clean.
-        auto voice_tile = GwScreens::GetInstance().voice_tile();
-        for (lv_obj_t* layer : {top_bar_, emoji_box_, preview_image_, bottom_bar_}) {
-            if (layer) lv_obj_set_parent(layer, voice_tile);
+
+        auto& gw = GwScreens::GetInstance();
+        gw.Build(lv_screen_active());
+        // Stock chat text becomes the Voice tile transcript; the other stock layers are replaced by ours.
+        gw.AdoptChat(bottom_bar_, chat_message_label_);
+        for (lv_obj_t* layer : {top_bar_, status_bar_, emoji_box_, preview_image_, container_}) {
+            if (layer) lv_obj_add_flag(layer, LV_OBJ_FLAG_HIDDEN);
         }
-        if (emoji_box_) lv_obj_align(emoji_box_, LV_ALIGN_CENTER, 0, -30);
-        if (bottom_bar_) lv_obj_align(bottom_bar_, LV_ALIGN_BOTTOM_MID, 0, 0);
-        if (top_bar_) lv_obj_align(top_bar_, LV_ALIGN_TOP_MID, 0, 0);
-        GwScreens::GetInstance().OnStopTap([]() {
+        gw.OnVoiceTap([]() { Application::GetInstance().ToggleChatState(); });
+        gw.OnStopTap([]() {
             auto& app = Application::GetInstance();
             if (app.GetDeviceState() != kDeviceStateIdle) app.EndConversation();
         });
-        GwScreens::GetInstance().OnSleepTap([]() {
+        gw.OnSleepTap([]() {
             auto& svc = Application::GetInstance().GetAudioService();
             bool muted = !svc.IsWakeWordMuted();
             svc.SetWakeWordMuted(muted);
             GwScreens::GetInstance().SetSleeping(muted);
         });
-        GwScreens::GetInstance().DumpGeometry();
-        // Tap anywhere on the Voice tile to start/stop listening (same as the boot button)
-        auto voice = GwScreens::GetInstance().voice_tile();
-        lv_obj_add_flag(voice, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_add_event_cb(voice, [](lv_event_t* e) {
-            Application::GetInstance().ToggleChatState();
-        }, LV_EVENT_CLICKED, nullptr);
+        gw.DumpGeometry();
+    }
+
+    // Stock notifications (Wi-Fi, errors, hints) go through the brand toast instead of the status bar.
+    virtual void ShowNotification(const char* notification, int duration_ms = 3000) override {
+        DisplayLockGuard lock(this);
+        GwScreens::GetInstance().ShowToast("note", notification ? notification : "", "");
+    }
+    virtual void ShowNotification(const std::string& notification, int duration_ms = 3000) override {
+        ShowNotification(notification.c_str(), duration_ms);
     }
 };
 
@@ -179,32 +190,55 @@ private:
     CustomBacklight* backlight_;
     PowerSaveTimer* power_save_timer_;
     esp_timer_handle_t clock_timer_ = nullptr;
+    int64_t last_pwr_press_us_ = -1000000;
 
     void InitializeClockTimer() {
         esp_timer_create_args_t args = {};
         args.callback = [](void* arg) {
             auto self = static_cast<GraysonWorkWatch*>(arg);
-            time_t now = time(nullptr);
-            struct tm t;
-            localtime_r(&now, &t);
-            char hhmm[8], date[24];
-            strftime(hhmm, sizeof hhmm, "%H:%M", &t);
-            strftime(date, sizeof date, "%a %d %b", &t);
-            int level = 0;
-            bool charging = false, discharging = false;
-            self->GetBatteryLevel(level, charging, discharging);
+            static int tick = 0;
             auto& app = Application::GetInstance();
-            bool active = app.GetDeviceState() == kDeviceStateListening || app.GetDeviceState() == kDeviceStateSpeaking ||
-                          app.GetDeviceState() == kDeviceStateConnecting;
+            auto st = app.GetDeviceState();
+            GwConvState cs = st == kDeviceStateConnecting ? GW_CONNECTING : st == kDeviceStateListening ? GW_LISTENING
+                           : st == kDeviceStateSpeaking ? GW_SPEAKING : GW_IDLE;
+            int key = self->pmic_ ? self->pmic_->PollKey() : 0;
+            if (key == 1) {
+                int64_t now = esp_timer_get_time();
+                bool dbl = (now - self->last_pwr_press_us_) < 600000;
+                self->last_pwr_press_us_ = now;
+                self->power_save_timer_->WakeUp();
+                DisplayLockGuard lock(self->GetDisplay());
+                if (dbl) {
+                    auto& svc = app.GetAudioService();
+                    bool muted = !svc.IsWakeWordMuted();
+                    svc.SetWakeWordMuted(muted);
+                    GwScreens::GetInstance().SetSleeping(muted);
+                    GwScreens::GetInstance().ShowToast("note", muted ? "Sleeping" : "Awake", muted ? "Wake word off" : "Say hey coder");
+                } else {
+                    GwScreens::GetInstance().GoTo(0);
+                }
+            }
+            if ((tick++ % 4) == 0) {
+                time_t now = time(nullptr);
+                struct tm t;
+                localtime_r(&now, &t);
+                char hhmm[8], date[24];
+                strftime(hhmm, sizeof hhmm, "%H:%M", &t);
+                strftime(date, sizeof date, "%a %d %b", &t);
+                int level = 0;
+                bool charging = false, discharging = false;
+                self->GetBatteryLevel(level, charging, discharging);
+                DisplayLockGuard lock(self->GetDisplay());
+                GwScreens::GetInstance().SetClock(t.tm_year > 100 ? hhmm : "00:00", t.tm_year > 100 ? date : "");
+                GwScreens::GetInstance().SetBattery(level, charging);
+            }
             DisplayLockGuard lock(self->GetDisplay());
-            GwScreens::GetInstance().SetClock(t.tm_year > 100 ? hhmm : "--:--", t.tm_year > 100 ? date : "");
-            GwScreens::GetInstance().SetBattery(level, charging);
-            GwScreens::GetInstance().SetConversationActive(active);
+            GwScreens::GetInstance().SetConversationState(cs);
         };
         args.arg = this;
-        args.name = "gw_clock";
+        args.name = "gw_tick";
         ESP_ERROR_CHECK(esp_timer_create(&args, &clock_timer_));
-        ESP_ERROR_CHECK(esp_timer_start_periodic(clock_timer_, 1000000));
+        ESP_ERROR_CHECK(esp_timer_start_periodic(clock_timer_, 250000));
     }
 
     void InitializePowerSaveTimer() {
@@ -270,14 +304,10 @@ private:
             app.ToggleChatState();
         });
 
-#if CONFIG_USE_DEVICE_AEC
         boot_button_.OnDoubleClick([this]() {
-            auto& app = Application::GetInstance();
-            if (app.GetDeviceState() == kDeviceStateIdle) {
-                app.SetAecMode(app.GetAecMode() == kAecOff ? kAecOnDeviceSide : kAecOff);
-            }
+            DisplayLockGuard lock(GetDisplay());
+            GwScreens::GetInstance().NextTile();
         });
-#endif
     }
 
     void InitializeSH8601Display() {

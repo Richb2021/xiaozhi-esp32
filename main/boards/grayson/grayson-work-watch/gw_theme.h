@@ -6,7 +6,11 @@ LV_FONT_DECLARE(font_archivo_black_96);
 LV_FONT_DECLARE(font_archivo_bold_22);
 LV_FONT_DECLARE(font_space_mono_14);
 LV_FONT_DECLARE(font_space_mono_18);
+LV_FONT_DECLARE(font_space_mono_16);
+LV_FONT_DECLARE(font_archivo_bold_26);
+LV_FONT_DECLARE(font_archivo_bold_30);
 LV_IMAGE_DECLARE(g_mark_160);
+LV_IMAGE_DECLARE(gw_bg);
 
 namespace gw {
 // Grayson Work palette (from the Grayson Games site theme)

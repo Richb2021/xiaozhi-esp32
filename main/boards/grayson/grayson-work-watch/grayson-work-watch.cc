@@ -17,6 +17,7 @@
 #include <driver/i2c_master.h>
 #include <driver/spi_master.h>
 #include "settings.h"
+#include "gw_theme.h"
 
 #include <esp_lcd_touch_ft5x06.h>
 #include <esp_lvgl_port.h>
@@ -115,6 +116,7 @@ public:
         lv_obj_set_style_pad_left(status_bar_, LV_HOR_RES*  0.1, 0);
         lv_obj_set_style_pad_right(status_bar_, LV_HOR_RES*  0.1, 0);
         lv_display_add_event_cb(display_, rounder_event_cb, LV_EVENT_INVALIDATE_AREA, NULL);
+        lv_obj_set_style_radius(lv_screen_active(), 0, 0);
     }
 };
 
@@ -308,6 +310,9 @@ private:
 
 public:
     GraysonWorkWatch() : boot_button_(BOOT_BUTTON_GPIO) {
+        // Brand theme must exist and be selected before the display reads Settings("display").theme
+        gw::MakeTheme();
+        gw::SelectThemeInSettings();
         InitializePowerSaveTimer();
         InitializeCodecI2c();
         InitializeAxp2101();

@@ -3,6 +3,8 @@
 #include <cJSON.h>
 #include <string>
 #include <vector>
+#include <memory>
+#include "display/lvgl_display/lvgl_image.h"
 
 struct DashboardJob { std::string id, provider, project, status, runtime_status; };
 struct DashboardBox { std::string box; bool ok; };
@@ -23,6 +25,10 @@ public:
     void ShowToast(const char* level, const char* title, const char* body);
     void GoTo(int tile);                          // 0 face, 1 dashboard, 2 voice
     lv_obj_t* voice_tile() const { return voice_tile_; }
+    // Full-screen video overlay (call with the LVGL lock held)
+    void ShowVideoFrame(std::unique_ptr<LvglImage> frame);
+    void HideVideo();
+    void OnVideoTap(void (*cb)()) { video_tap_cb_ = cb; }
 private:
     void BuildFace(lv_obj_t* tile);
     void BuildDashboard(lv_obj_t* tile);
@@ -37,5 +43,9 @@ private:
              *jobs_header_ = nullptr, *jobs_list_ = nullptr, *boxes_grid_ = nullptr;
     lv_obj_t *toast_ = nullptr, *toast_title_ = nullptr, *toast_body_ = nullptr, *toast_kind_ = nullptr;
     lv_timer_t* toast_timer_ = nullptr;
+    lv_obj_t* video_img_ = nullptr;
+    std::unique_ptr<LvglImage> video_frames_[2];
+    int video_frame_idx_ = 0;
+    void (*video_tap_cb_)() = nullptr;
     DashboardModel model_;
 };

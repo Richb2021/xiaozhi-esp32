@@ -12,6 +12,7 @@
 #include "websocket_protocol.h"
 #if CONFIG_BOARD_TYPE_GRAYSON_WORK_WATCH
 #include "boards/grayson/grayson-work-watch/gw_screens.h"
+#include "boards/grayson/grayson-work-watch/gw_video.h"
 #endif
 
 #include <driver/gpio.h>
@@ -738,6 +739,14 @@ void Application::InitializeProtocol() {
                 Schedule([display, l = std::string(level->valuestring), t = std::string(title->valuestring), b = std::string(cJSON_IsString(body) ? body->valuestring : "")]() {
                     DisplayLockGuard lock(display); GwScreens::GetInstance().ShowToast(l.c_str(), t.c_str(), b.c_str());
                 });
+            }
+        } else if (strcmp(type->valuestring, "gw_video") == 0) {
+            auto url = cJSON_GetObjectItem(root, "url");
+            auto title = cJSON_GetObjectItem(root, "title");
+            auto secs = cJSON_GetObjectItem(root, "seconds");
+            if (cJSON_IsString(url)) {
+                GwVideo::GetInstance().Play(url->valuestring, cJSON_IsString(title) ? title->valuestring : "Video",
+                                            cJSON_IsNumber(secs) ? (int)secs->valuedouble : 0);
             }
 #endif
         } else {

@@ -197,3 +197,41 @@ void GwScreens::ShowToast(const char* level, const char* title, const char* body
     toast_timer_ = lv_timer_create([](lv_timer_t* t) { auto self = static_cast<GwScreens*>(lv_timer_get_user_data(t)); lv_obj_add_flag(self->toast_, LV_OBJ_FLAG_HIDDEN); self->toast_timer_ = nullptr; lv_timer_delete(t); }, 12000, this);
     lv_timer_set_repeat_count(toast_timer_, 1);
 }
+
+void GwScreens::ShowVideoFrame(std::unique_ptr<LvglImage> frame) {
+    if (!video_img_) {
+        auto screen = lv_screen_active();
+        video_img_ = lv_image_create(screen);
+        lv_obj_set_style_bg_color(video_img_, C(DEEP), 0);
+        lv_obj_set_style_bg_opa(video_img_, LV_OPA_COVER, 0);
+        lv_obj_set_size(video_img_, LV_HOR_RES, LV_VER_RES);
+        lv_obj_center(video_img_);
+        lv_image_set_inner_align(video_img_, LV_IMAGE_ALIGN_CENTER);
+        lv_obj_add_flag(video_img_, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(video_img_, [](lv_event_t* e) {
+            auto self = static_cast<GwScreens*>(lv_event_get_user_data(e));
+            if (self->video_tap_cb_) self->video_tap_cb_();
+        }, LV_EVENT_CLICKED, this);
+    }
+    // Keep the previous frame alive until LVGL has drawn the new one
+    int idx = video_frame_idx_;
+    video_frames_[idx] = std::move(frame);
+    video_frame_idx_ = (idx + 1) % 2;
+    auto dsc = video_frames_[idx]->image_dsc();
+    lv_image_set_src(video_img_, dsc);
+    // Scale to fill the panel width (frame is 320 px wide, panel 410): 256 = 100 %
+    if (dsc->header.w > 0) {
+        lv_image_set_scale(video_img_, (uint32_t)LV_HOR_RES * 256 / dsc->header.w);
+    }
+    lv_obj_remove_flag(video_img_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(video_img_);
+}
+
+void GwScreens::HideVideo() {
+    if (video_img_) {
+        lv_obj_add_flag(video_img_, LV_OBJ_FLAG_HIDDEN);
+        lv_image_set_src(video_img_, nullptr);
+    }
+    video_frames_[0].reset();
+    video_frames_[1].reset();
+}

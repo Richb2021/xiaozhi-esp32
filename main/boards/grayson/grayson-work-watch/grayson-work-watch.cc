@@ -122,6 +122,12 @@ public:
         lv_obj_set_style_radius(lv_screen_active(), 0, 0);
         // Face / Dashboard / Voice tiles; the stock chat container becomes the Voice tile
         GwScreens::GetInstance().Build(lv_screen_active(), container_);
+        // Tap anywhere on the Voice tile to start/stop listening (same as the boot button)
+        auto voice = GwScreens::GetInstance().voice_tile();
+        lv_obj_add_flag(voice, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(voice, [](lv_event_t* e) {
+            Application::GetInstance().ToggleChatState();
+        }, LV_EVENT_CLICKED, nullptr);
     }
 };
 
